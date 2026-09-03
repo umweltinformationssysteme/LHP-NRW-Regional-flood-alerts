@@ -1,0 +1,73 @@
+name: Hochwasser-Warnkarte NRW
+
+# Läuft alle 20 Minuten – GitHub Actions-Cron erlaubt maximal 5-Min-Granularität,
+# daher werden drei überlappende Cron-Einträge genutzt (0, 20, 40 Minuten).
+# Achtung: Bei hoher Systemlast kann GitHub den Trigger um einige Minuten verschieben.
+on:
+  schedule:
+    - cron: "0 * * * *"    # jede Stunde  :00
+    - cron: "20 * * * *"   # jede Stunde  :20
+    - cron: "40 * * * *"   # jede Stunde  :40
+
+  # Manueller Start über GitHub UI / gh CLI:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    name: Karte erzeugen und committen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write   # nötig, damit der Workflow committen darf
+
+    steps:
+      # 1 ── Repository auschecken ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1   # nur letzten Commit – spart Zeit
+
+      # 2 ── Python einrichten ──────────────────────────────────────────────────
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # 3 ── System-Bibliotheken installieren (für cairosvg / rasterio) ─────────
+      - name: System-Abhängigkeiten installieren
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgdal-dev \
+            gdal-bin
+
+      # 4 ── Python-Pakete installieren ─────────────────────────────────────────
+      - name: Python-Pakete installieren
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      # 5 ── Karte erzeugen ─────────────────────────────────────────────────────
+      - name: Karte erzeugen
+        run: python generate_map.py
+
+      # 6 ── Änderungen committen ───────────────────────────────────────────────
+      # Nur committen, wenn sich das Bild tatsächlich geändert hat.
+      - name: Bild committen
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add flood-warning-map-nrw-today.jpg
+
+          # Prüfen ob es Änderungen gibt (exit-code 0 = keine Änderungen)
+          if git diff --cached --quiet; then
+            echo "Keine Änderung am Bild – kein Commit."
+          else
+            TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+            git commit -m "chore: Hochwasser-Warnkarte aktualisiert [${TIMESTAMP}]"
+            git push
+            echo "Bild erfolgreich committet."
+          fi
