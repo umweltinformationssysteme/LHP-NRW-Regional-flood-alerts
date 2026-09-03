@@ -1,0 +1,18 @@
+# NRW Hochwasser-Warnkarte – Python-Abhaengigkeiten
+# Install: pip install -r requirements.txt
+#
+# System requirement for cairosvg (LHP logo rendering):
+#   Debian/Ubuntu: sudo apt-get install libcairo2-dev
+#   macOS:         brew install cairo
+
+requests>=2.31.0          # HTTP-Anfragen an die LHP API
+geopandas>=0.14.0         # GeoJSON laden, projizieren, plotten
+rasterio>=1.3.0           # GeoTIFF (Satellitenbild) einlesen
+matplotlib>=3.8.0         # Kartenrendering
+Pillow>=10.0.0            # PNG -> JPEG, Bild-Resize
+shapely>=2.0.0            # Geometrieoperationen (unary_union, buffer)
+numpy>=1.26.0             # Array-Operationen fuer Raster-Daten
+cairosvg>=2.7.0           # SVG -> PNG (LHP-Logo)
+pyproj>=3.6.0             # Koordinatentransformationen (via geopandas)
+fiona>=1.9.0              # GeoJSON-Leseschicht (via geopandas)
+# zoneinfo ist Teil der Python-Standardbibliothek ab Python 3.9
