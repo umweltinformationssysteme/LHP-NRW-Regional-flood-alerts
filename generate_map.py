@@ -72,8 +72,8 @@ POLYLINE_FILE = "Warngebiete-Polyline-NW.geojson"
 TIFF_FILE     = "background.tiff"
 
 LOGO_FILE  = "logo.png"   # LHP logo – PNG stored in repo root
-LOGO_W_PX  = 160          # rendered logo width in output image (px)
-LOGO_H_PX  =  88          # keeps original aspect ratio 2239:1227
+LOGO_W_PX  = 100          # rendered logo width in output image (px)
+LOGO_H_PX  =  55          # keeps original aspect ratio 2239:1227
 LOGO_ALPHA = 0.80         # opacity: 0.80 = 20 % transparent
 
 TZ_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
