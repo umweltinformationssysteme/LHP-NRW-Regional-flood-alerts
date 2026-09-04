@@ -310,9 +310,25 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
 
     # ── LHP Logo (upper-right corner) ─────────────────────────────────────────
     if logo_arr is not None:
-        PAD = 10
-        x0  = 1.0 - (LOGO_W_PX + PAD) / IMG_W_PX
-        y0  = 1.0 - (LOGO_H_PX + PAD) / IMG_H_PX
+        PAD  = 10    # gap from image edge in px
+        BPAD = 6     # extra white padding around logo in px
+        x0   = 1.0 - (LOGO_W_PX + PAD) / IMG_W_PX
+        y0   = 1.0 - (LOGO_H_PX + PAD) / IMG_H_PX
+
+        # White semi-transparent rounded rectangle behind the logo
+        bg_x = x0   - BPAD / IMG_W_PX
+        bg_y = y0   - BPAD / IMG_H_PX
+        bg_w = LOGO_W_PX / IMG_W_PX + 2 * BPAD / IMG_W_PX
+        bg_h = LOGO_H_PX / IMG_H_PX + 2 * BPAD / IMG_H_PX
+        bg = mpatches.FancyBboxPatch(
+            (bg_x, bg_y), bg_w, bg_h,
+            boxstyle="round,pad=0",
+            transform=ax.transAxes,
+            facecolor="white", edgecolor="none",
+            alpha=0.55, zorder=9,
+        )
+        ax.add_patch(bg)
+
         ins = ax.inset_axes([x0, y0,
                               LOGO_W_PX / IMG_W_PX,
                               LOGO_H_PX / IMG_H_PX])
