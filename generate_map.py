@@ -28,7 +28,7 @@ LHP API
 
 Alert categories (LHP colour spec)
 ------------------------------------
-  "Sehr grosses Hochwasser"  violet  #9e8db9
+  "Sehr grosses Hochwasser"  red     #ec7370  (NRW: same colour as Grosses)
   "Grosses Hochwasser"       red     #ec7370
   "Hochwasser"               orange  #fcae4b
   "Vorwarnung"               hatched #f29d9b  (diagonal stripes ///)
@@ -87,7 +87,7 @@ COLORS: dict[str, tuple] = {
     "vorwarnung": (*to_rgba("#f29d9b")[:3], ALPHA),
     "hochwasser": (*to_rgba("#fcae4b")[:3], ALPHA),
     "gross":      (*to_rgba("#ec7370")[:3], ALPHA),
-    "sehr_gross": (*to_rgba("#9e8db9")[:3], ALPHA),
+    "sehr_gross": (*to_rgba("#ec7370")[:3], ALPHA),
 }
 
 # LHP category string -> internal severity key (first match wins; longest first)
@@ -222,9 +222,8 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
     DRAW_ORDER = ["none", "nodata", "entwarnung",
                   "vorwarnung", "hochwasser", "gross", "sehr_gross"]
 
-    # Levels that represent an active warning – line features without an active
-    # warning are skipped entirely so their buffer fill does not cover the
-    # underlying polygon colours.
+    # Line features without an active warning are drawn outline-only
+    # (transparent fill) so the underlying polygon colours show through.
     ACTIVE_LEVELS = {"entwarnung", "vorwarnung", "hochwasser", "gross", "sehr_gross"}
 
     for gdf, edge_c, edge_lw, is_lines in [
@@ -232,12 +231,18 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
         (line_gdf, "#555555", 0.4, True),
     ]:
         for level in DRAW_ORDER:
-            # Line objects with no warning: skip – don't draw buffer fill
-            if is_lines and level not in ACTIVE_LEVELS:
-                continue
             sub = gdf[gdf["warn_key"] == level]
             if sub.empty:
                 continue
+
+            # Line features with no active warning: outline only, no fill
+            if is_lines and level not in ACTIVE_LEVELS:
+                sub.plot(ax=ax,
+                         facecolor="none",
+                         edgecolor="#666666",
+                         linewidth=0.7)
+                continue
+
             color = COLORS[level]
             if level == "vorwarnung":
                 sub.plot(ax=ax,
@@ -265,7 +270,7 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
 
     handles = [
         mpatches.Patch(facecolor=COLORS["gross"][:3] + (1.,),
-                       label="Großes Hochwasser", **sk),
+                       label="Grosses Hochwasser", **sk),
         mpatches.Patch(facecolor=COLORS["hochwasser"][:3] + (1.,),
                        label="Hochwasser", **sk),
         mpatches.Patch(facecolor=COLORS["vorwarnung"][:3] + (1.,),
