@@ -42,7 +42,6 @@ import sys
 import datetime
 import zoneinfo
 
-import cairosvg
 import requests
 import numpy as np
 import geopandas as gpd
@@ -67,14 +66,15 @@ POLYLINE_BUFFER = 1_600     # metres
 # LHP PublicAPI – stable v1 (released 2025-02-04)
 LHP_API_BASE   = "https://api.hochwasserzentralen.de/public/v1"
 LHP_ALERTS_URL = f"{LHP_API_BASE}/data/alerts"
-LHP_LOGO_URL   = f"{LHP_API_BASE}/images/logo"
 
 POLYGON_FILE  = "Warngebiete-Polygon-NW.geojson"
 POLYLINE_FILE = "Warngebiete-Polyline-NW.geojson"
 TIFF_FILE     = "background.tiff"
 
-LOGO_W_PX = 180   # rendered logo width in output image
-LOGO_H_PX =  54   # rendered logo height in output image
+LOGO_FILE  = "logo.png"   # LHP logo – PNG stored in repo root
+LOGO_W_PX  = 160          # rendered logo width in output image (px)
+LOGO_H_PX  =  88          # keeps original aspect ratio 2239:1227
+LOGO_ALPHA = 0.80         # opacity: 0.80 = 20 % transparent
 
 TZ_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
 
@@ -152,27 +152,24 @@ def fetch_lhp_alerts(state: str = "NW") -> tuple[dict, str]:
     return {}, ""
 
 
-def fetch_lhp_logo() -> bytes | None:
-    """Downloads LHP SVG logo. Returns raw bytes or None on failure."""
+def load_logo() -> np.ndarray | None:
+    """
+    Loads logo.png from the repo root, resizes to LOGO_W_PX x LOGO_H_PX,
+    and applies LOGO_ALPHA to the alpha channel.
+    Returns an RGBA numpy array, or None if the file is missing.
+    """
     try:
-        r = requests.get(LHP_LOGO_URL, timeout=10)
-        r.raise_for_status()
-        print(f"  Logo: {len(r.content)} bytes")
-        return r.content
-    except Exception as e:
-        print(f"INFO: LHP logo not available: {e}")
+        img = Image.open(LOGO_FILE).convert("RGBA")
+        img = img.resize((LOGO_W_PX, LOGO_H_PX), Image.LANCZOS)
+        arr = np.array(img, dtype=np.float32)
+        arr[..., 3] *= LOGO_ALPHA   # apply transparency to alpha channel
+        print(f"  Logo loaded: {LOGO_FILE}  ({LOGO_W_PX}x{LOGO_H_PX} px, alpha={LOGO_ALPHA})")
+        return arr.astype(np.uint8)
+    except FileNotFoundError:
+        print(f"INFO: {LOGO_FILE} not found - logo skipped.")
         return None
-
-
-def rasterize_logo(svg_bytes: bytes) -> np.ndarray | None:
-    """Converts SVG logo bytes to RGBA numpy array via cairosvg. None on failure."""
-    try:
-        png = cairosvg.svg2png(bytestring=svg_bytes,
-                               output_width=LOGO_W_PX,
-                               output_height=LOGO_H_PX)
-        return np.array(Image.open(io.BytesIO(png)).convert("RGBA"))
     except Exception as e:
-        print(f"INFO: Logo rasterisation failed: {e}")
+        print(f"INFO: Logo loading failed: {e}")
         return None
 
 
@@ -308,27 +305,11 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
             va="bottom", ha="left",
             bbox=dict(facecolor="black", alpha=0.30, pad=2, edgecolor="none"))
 
-    # ── LHP Logo (upper-right corner) ─────────────────────────────────────────
+    # ── LHP Logo (upper-left corner, 20 % transparent) ───────────────────────
     if logo_arr is not None:
-        PAD  = 10    # gap from image edge in px
-        BPAD = 6     # extra white padding around logo in px
-        x0   = 1.0 - (LOGO_W_PX + PAD) / IMG_W_PX
-        y0   = 1.0 - (LOGO_H_PX + PAD) / IMG_H_PX
-
-        # White semi-transparent rounded rectangle behind the logo
-        bg_x = x0   - BPAD / IMG_W_PX
-        bg_y = y0   - BPAD / IMG_H_PX
-        bg_w = LOGO_W_PX / IMG_W_PX + 2 * BPAD / IMG_W_PX
-        bg_h = LOGO_H_PX / IMG_H_PX + 2 * BPAD / IMG_H_PX
-        bg = mpatches.FancyBboxPatch(
-            (bg_x, bg_y), bg_w, bg_h,
-            boxstyle="round,pad=0",
-            transform=ax.transAxes,
-            facecolor="white", edgecolor="none",
-            alpha=0.55, zorder=9,
-        )
-        ax.add_patch(bg)
-
+        PAD = 10   # gap from image edge in px
+        x0  = PAD / IMG_W_PX
+        y0  = 1.0 - (LOGO_H_PX + PAD) / IMG_H_PX
         ins = ax.inset_axes([x0, y0,
                               LOGO_W_PX / IMG_W_PX,
                               LOGO_H_PX / IMG_H_PX])
@@ -367,8 +348,7 @@ def main() -> None:
     )
     print(f"Active warning areas: {active}/{len(poly_gdf) + len(line_gdf)}")
 
-    logo_bytes = fetch_lhp_logo()
-    logo_arr   = rasterize_logo(logo_bytes) if logo_bytes else None
+    logo_arr = load_logo()
 
     render_map(poly_gdf, line_gdf, tiff_crs, tiff_bounds,
                tiff_data, logo_arr)
