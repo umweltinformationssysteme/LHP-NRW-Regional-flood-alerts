@@ -12,7 +12,6 @@ matplotlib>=3.8.0         # Kartenrendering
 Pillow>=10.0.0            # PNG -> JPEG, Bild-Resize
 shapely>=2.0.0            # Geometrieoperationen (unary_union, buffer)
 numpy>=1.26.0             # Array-Operationen fuer Raster-Daten
-cairosvg>=2.7.0           # SVG -> PNG (LHP-Logo)
 pyproj>=3.6.0             # Koordinatentransformationen (via geopandas)
 fiona>=1.9.0              # GeoJSON-Leseschicht (via geopandas)
 # zoneinfo ist Teil der Python-Standardbibliothek ab Python 3.9
