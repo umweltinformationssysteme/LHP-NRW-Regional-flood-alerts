@@ -270,7 +270,7 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
 
     handles = [
         mpatches.Patch(facecolor=COLORS["gross"][:3] + (1.,),
-                       label="Grosses Hochwasser", **sk),
+                       label="Großes Hochwasser", **sk),
         mpatches.Patch(facecolor=COLORS["hochwasser"][:3] + (1.,),
                        label="Hochwasser", **sk),
         mpatches.Patch(facecolor=COLORS["vorwarnung"][:3] + (1.,),
