@@ -284,10 +284,17 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
     now_berlin = datetime.datetime.now(tz=TZ_BERLIN)
     title = f"NRW Hochwasserwarnungen\n{now_berlin.strftime('%d.%m.%Y, %H:%M Uhr')}"
 
+    # Positionierung oben links unterhalb des Logos:
+    # X-Start bleibt links (entspricht ca. PAD = 10 px)
+    # Y-Start berechnet sich aus oberem Rand minus Logo-Höhe minus Abstand für das Logo (55 + 10 = 65 px)
+    PAD = 10
+    leg_x = PAD / IMG_W_PX
+    leg_y = 1.0 - (LOGO_H_PX + PAD * 2 + 15) / IMG_H_PX  # Platz unter dem Logo schaffen
+
     leg = ax.legend(
         handles=handles,
-        loc="lower right",
-        bbox_to_anchor=(948 / IMG_W_PX, 12 / IMG_H_PX),
+        loc="upper left",
+        bbox_to_anchor=(leg_x, leg_y),
         bbox_transform=ax.transAxes,
         fontsize=7,
         framealpha=0.90, edgecolor="#bbbbbb", facecolor="#ffffff",
