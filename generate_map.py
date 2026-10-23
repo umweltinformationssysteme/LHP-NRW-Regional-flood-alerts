@@ -82,7 +82,7 @@ TZ_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
 ALPHA = 0.72
 COLORS: dict[str, tuple] = {
     "none":       (*to_rgba("#ffffff")[:3], ALPHA),
-    "nodata":     (*to_rgba("#ededed")[:3], ALPHA),
+    "nodata":     (*to_rgba("#9b59b6")[:3], ALPHA),
     "entwarnung": (*to_rgba("#8fd279")[:3], ALPHA),
     "vorwarnung": (*to_rgba("#f29d9b")[:3], ALPHA),
     "hochwasser": (*to_rgba("#fcae4b")[:3], ALPHA),
