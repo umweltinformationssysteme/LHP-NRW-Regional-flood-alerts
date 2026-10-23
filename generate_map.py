@@ -34,7 +34,7 @@ Alert categories (LHP colour spec)
   "Vorwarnung"               hatched #f29d9b  (diagonal stripes ///)
   "Entwarnung"               green   #8fd279
   (no active alert)          white   #ffffff
-  (no data / under constr.)  grey    #ededed
+  (no data / under constr.)  grey    #9e9e9e (darker than LHP #ededed)
 """
 
 import io
@@ -82,7 +82,7 @@ TZ_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
 ALPHA = 0.72
 COLORS: dict[str, tuple] = {
     "none":       (*to_rgba("#ffffff")[:3], ALPHA),
-    "nodata":     (*to_rgba("#636363")[:3], ALPHA),
+    "nodata":     (*to_rgba("#9e9e9e")[:3], ALPHA),
     "entwarnung": (*to_rgba("#8fd279")[:3], ALPHA),
     "vorwarnung": (*to_rgba("#f29d9b")[:3], ALPHA),
     "hochwasser": (*to_rgba("#fcae4b")[:3], ALPHA),
@@ -106,6 +106,11 @@ _CATEGORY_MAP = [
 ]
 
 
+# LHP class number (API legend) -> internal key. NRW has no class 6.
+_LHP_CLASS_MAP = {1: "entwarnung", 2: "vorwarnung", 4: "hochwasser",
+                  5: "gross", 6: "sehr_gross"}
+
+
 def _classify(category: str) -> str:
     s = category.lower().strip()
     for pattern, key in _CATEGORY_MAP:
@@ -115,14 +120,17 @@ def _classify(category: str) -> str:
 
 
 # ── LHP API calls ─────────────────────────────────────────────────────────────
-def fetch_lhp_alerts(state: str = "NW") -> tuple[dict, str]:
+def fetch_lhp_alerts(state: str = "NW") -> tuple[dict, str, bool]:
     """
     GETs active flood alerts for *state* from the LHP stable API.
 
     Returns
     -------
-    alerts  : dict  -  { area_id: severity_key }  (empty on failure)
+    alerts  : dict  -  { area_id: severity_key }  (empty if no warnings or on failure)
     updated : str   -  ISO-8601 timestamp from the 'updated' field ("" on failure)
+    ok      : bool  -  True if the API answered successfully. An empty `alerts`
+                       with ok=True means "no active warnings"; ok=False means
+                       "no data available".
     """
     params = {"state": state}
     print(f"Fetching LHP alerts ... ({LHP_ALERTS_URL}?state={state})")
@@ -131,6 +139,9 @@ def fetch_lhp_alerts(state: str = "NW") -> tuple[dict, str]:
                          headers={"Accept": "application/geo+json"})
         r.raise_for_status()
         data     = r.json()
+        if data.get("status", "success") != "success":
+            print(f"WARNING: LHP API status={data.get('status')!r}", file=sys.stderr)
+            return {}, "", False
         updated  = data.get("updated", "")
         features = data.get("features", [])
         print(f"  -> {len(features)} feature(s), updated={updated}")
@@ -140,16 +151,22 @@ def fetch_lhp_alerts(state: str = "NW") -> tuple[dict, str]:
             props    = feat.get("properties", {})
             area_id  = str(props.get("id", props.get("ID", ""))).strip()
             category = str(props.get("category", props.get("Category", ""))).strip()
-            key      = _classify(category)
+            try:
+                key = _LHP_CLASS_MAP.get(int(props.get("lhpClass"))) or _classify(category)
+            except (TypeError, ValueError):
+                key = _classify(category)
+            if key == "none":
+                print(f"WARNING: feature not classifiable, properties={props}",
+                      file=sys.stderr)
             alerts[area_id] = key
             print(f"    {area_id:<15s}  cat={category!r:<35s}  -> {key}")
-        return alerts, updated
+        return alerts, updated, True
 
     except requests.HTTPError as e:
         print(f"WARNING: LHP API HTTP error: {e}", file=sys.stderr)
     except Exception as e:
         print(f"WARNING: LHP API request failed: {e}", file=sys.stderr)
-    return {}, ""
+    return {}, "", False
 
 
 def load_logo() -> np.ndarray | None:
@@ -175,12 +192,13 @@ def load_logo() -> np.ndarray | None:
 
 # ── Geodata helpers ───────────────────────────────────────────────────────────
 def load_and_assign(path: str, alerts: dict, crs,
-                    buffer_m: float = 0.0) -> gpd.GeoDataFrame:
+                    buffer_m: float = 0.0,
+                    default_key: str = "nodata") -> gpd.GeoDataFrame:
     gdf = gpd.read_file(path).to_crs(crs)
     gdf["area_id"] = gdf["ID"].str.strip()
     if buffer_m > 0:
         gdf["geometry"] = gdf.geometry.buffer(buffer_m)
-    gdf["warn_key"] = gdf["area_id"].map(lambda x: alerts.get(x, "nodata"))
+    gdf["warn_key"] = gdf["area_id"].map(lambda x: alerts.get(x, default_key))
     return gdf
 
 
@@ -339,14 +357,21 @@ def main() -> None:
     now_berlin = datetime.datetime.now(tz=TZ_BERLIN)
     print(f"=== NRW flood-warning map – {now_berlin.strftime('%d.%m.%Y %H:%M:%S')} (Berlin) ===")
 
-    alerts, updated = fetch_lhp_alerts(state="NW")
+    alerts, updated, ok = fetch_lhp_alerts(state="NW")
+
+    # API ok  -> areas without an alert have "no warning" (white)
+    # API down -> we cannot know anything: "no data" (grey)
+    default_key = "none" if ok else "nodata"
+    print(f"API ok={ok}  -> default for areas without alert: {default_key}")
 
     with rasterio.open(TIFF_FILE) as src:
         tiff_crs, tiff_bounds, tiff_data = src.crs, src.bounds, src.read()
 
-    poly_gdf = load_and_assign(POLYGON_FILE,  alerts, tiff_crs, buffer_m=0)
+    poly_gdf = load_and_assign(POLYGON_FILE,  alerts, tiff_crs, buffer_m=0,
+                               default_key=default_key)
     line_gdf = load_and_assign(POLYLINE_FILE, alerts, tiff_crs,
-                               buffer_m=POLYLINE_BUFFER)
+                               buffer_m=POLYLINE_BUFFER,
+                               default_key=default_key)
 
     active = sum(
         (gdf["warn_key"].isin(
