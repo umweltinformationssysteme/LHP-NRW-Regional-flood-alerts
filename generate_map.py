@@ -34,7 +34,7 @@ Alert categories (LHP colour spec)
   "Vorwarnung"               hatched #f29d9b  (diagonal stripes ///)
   "Entwarnung"               green   #8fd279
   (no active alert)          white   #ffffff
-  (no data / under constr.)  grey    #ededed
+  (no data / under constr.)  grey    #ededed, hatched with #9e9e9e (xxx)
 """
 
 import io
@@ -53,6 +53,9 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import to_rgba
 from shapely.ops import unary_union
 from PIL import Image
+
+# Thickness of hatch lines (matplotlib default: 1.0 pt)
+matplotlib.rcParams["hatch.linewidth"] = 0.6
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 OUTPUT_FILE   = "flood-warning-map-nrw-today.jpg"
@@ -76,13 +79,17 @@ LOGO_W_PX  = 100          # rendered logo width in output image (px)
 LOGO_H_PX  =  55          # keeps original aspect ratio 2239:1227
 LOGO_ALPHA = 0.80         # opacity: 0.80 = 20 % transparent
 
+# "No data" hatching (distinct from Vorwarnung, which uses ///)
+NODATA_EDGE  = "#9e9e9e"
+NODATA_HATCH = "xxx"
+
 TZ_BERLIN = zoneinfo.ZoneInfo("Europe/Berlin")
 
 # ── Warning-level colours (RGBA, semi-transparent overlay) ────────────────────
 ALPHA = 0.72
 COLORS: dict[str, tuple] = {
     "none":       (*to_rgba("#ffffff")[:3], ALPHA),
-    "nodata":     (*to_rgba("#9b59b6")[:3], ALPHA),
+    "nodata":     (*to_rgba("#ededed")[:3], ALPHA),
     "entwarnung": (*to_rgba("#8fd279")[:3], ALPHA),
     "vorwarnung": (*to_rgba("#f29d9b")[:3], ALPHA),
     "hochwasser": (*to_rgba("#fcae4b")[:3], ALPHA),
@@ -247,6 +254,12 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
                          edgecolor="#c06060",
                          linewidth=edge_lw,
                          hatch="///")
+            elif level == "nodata":
+                sub.plot(ax=ax,
+                         facecolor=[color] * len(sub),
+                         edgecolor=NODATA_EDGE,
+                         linewidth=edge_lw,
+                         hatch=NODATA_HATCH)
             else:
                 sub.plot(ax=ax,
                          color=[color] * len(sub),
@@ -264,6 +277,7 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
     # ── Legend ────────────────────────────────────────────────────────────────
     sk = dict(edgecolor="#888888", linewidth=0.5)
     hk = dict(edgecolor="#c06060", linewidth=0.5, hatch="///")
+    nk = dict(edgecolor=NODATA_EDGE, linewidth=0.5, hatch=NODATA_HATCH)
 
     handles = [
         mpatches.Patch(facecolor=COLORS["gross"][:3] + (1.,),
@@ -277,7 +291,7 @@ def render_map(poly_gdf: gpd.GeoDataFrame,
         mpatches.Patch(facecolor=COLORS["none"][:3] + (1.,),
                        label="Keine Warnung", **sk),
         mpatches.Patch(facecolor=COLORS["nodata"][:3] + (1.,),
-                       label="Derzeit keine Daten", **sk),
+                       label="Derzeit keine Daten", **nk),
     ]
 
     # Legend title: "NRW Hochwasserwarnungen" + current Berlin date/time
